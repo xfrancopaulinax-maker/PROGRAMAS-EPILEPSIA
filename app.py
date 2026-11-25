@@ -235,6 +235,72 @@ def cuenta_regresiva(segundos, titulo="⏸️ Pausa"):
     components.html(codigo, height=135)
 
 
+def leer_en_voz_alta(texto, repeticiones=2, pausa_seg=3):
+    """Lee un texto con la voz del navegador (Web Speech API), N veces."""
+    limpio = re.sub(r"[*_]", "", texto)
+    codigo = f"""
+    <div style="font-family:sans-serif;padding:12px;background:#EAF2FB;color:#111;
+         border-radius:8px;">
+      <button id="play" style="font-size:16px;padding:8px 14px;cursor:pointer;">
+        ▶️ Escuchar el relato ({repeticiones} veces)</button>
+      <button id="stop" style="font-size:16px;padding:8px 14px;cursor:pointer;">
+        ⏹️ Detener</button>
+      <span id="estado" style="margin-left:12px;font-size:15px;"></span>
+    </div>
+    <script>
+      const texto = {json.dumps(limpio)};
+      const total = {int(repeticiones)};
+      const pausa = {int(pausa_seg)} * 1000;
+      const synth = window.speechSynthesis;
+      const estado = document.getElementById("estado");
+      let activo = false;
+
+      function elegirVoz() {{
+        const voces = synth.getVoices();
+        return voces.find(v => v.lang === "es-MX")
+            || voces.find(v => v.lang.toLowerCase().startsWith("es"))
+            || null;
+      }}
+      function leer(k) {{
+        if (!activo) return;
+        estado.textContent = "🔊 Lectura " + (k + 1) + " de " + total;
+        const u = new SpeechSynthesisUtterance(texto);
+        u.lang = "es-MX";
+        u.rate = 0.9;
+        const voz = elegirVoz();
+        if (voz) u.voice = voz;
+        u.onend = function() {{
+          if (!activo) return;
+          if (k + 1 < total) {{
+            estado.textContent = "⏳ Pausa breve...";
+            setTimeout(function() {{ leer(k + 1); }}, pausa);
+          }} else {{
+            activo = false;
+            estado.textContent = "✅ Terminó la lectura";
+          }}
+        }};
+        u.onerror = function() {{
+          activo = false;
+          estado.textContent = "⚠️ Tu navegador no pudo reproducir la voz";
+        }};
+        synth.speak(u);
+      }}
+      document.getElementById("play").onclick = function() {{
+        if (!synth) {{ estado.textContent = "⚠️ Este navegador no tiene voz"; return; }}
+        synth.cancel();
+        activo = true;
+        leer(0);
+      }};
+      document.getElementById("stop").onclick = function() {{
+        activo = false;
+        if (synth) synth.cancel();
+        estado.textContent = "⏹️ Detenido";
+      }};
+    </script>
+    """
+    components.html(codigo, height=75)
+
+
 def reiniciar_sesion(n):
     prefijo = f"s{n}_"
     for clave in list(st.session_state.keys()):
@@ -561,11 +627,13 @@ def sesion_2():
 
     eventos = EVENTOS_S2[nivel]
     st.markdown(
-        "**Instrucciones:** 1) Lee el relato con calma. 2) Cada vez que"
-        " aparezca la palabra «brújula», pulsa el botón. 3) Después anota en"
-        " la tabla la hora y la ficha de cada vez que apareció."
+        "**Instrucciones:** 1) Pulsa «Escuchar el relato»: una voz lo leerá"
+        " **dos veces**. 2) Cada vez que escuches la palabra «brújula», pulsa"
+        " el botón de abajo. 3) Después anota en la tabla la hora y la ficha"
+        " de cada vez que apareció."
     )
-    st.info(f"**Relato guía:** «{RELATOS_S2[nivel]}»")
+    # El relato NUNCA se muestra escrito: solo se escucha (sin apoyo visual).
+    leer_en_voz_alta(RELATOS_S2[nivel], repeticiones=2)
 
     c1, c2, c3 = st.columns(3)
     with c1:
